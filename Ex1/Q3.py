@@ -1,6 +1,11 @@
 import numpy as np
 
 
+def f(x, w, U, b1, b2):
+    h = np.maximum(np.dot(U.T, x) + b1, 0)
+    return np.dot(w.T, h) + b2
+
+
 def create_data_set():
     data = [(0, 0), (0, 1), (1, 0), (1, 1)]
     labels = [-1, 1, 1, -1]
