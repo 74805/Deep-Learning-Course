@@ -42,6 +42,6 @@ for i, class_name in enumerate(class_names):
     ax.set_title(class_name)
 
 # Adjust layout
-plt.subplots_adjust(hspace=100)
+plt.subplots_adjust()
 plt.tight_layout()
 plt.show()
