@@ -27,19 +27,21 @@ class_names = [
     "Ankle boot",
 ]
 
+examples_per_class = 4
+
 # Initialize a figure
-fig, axes = plt.subplots(nrows=5, ncols=2, figsize=(12, 30))
+fig, axes = plt.subplots(nrows=examples_per_class, ncols=10, figsize=(12, 30))
 
 # plot an example of each class
 for i, class_name in enumerate(class_names):
     # Select indices of examples belonging to the current class
     class_indices = np.where(labels == i)[0]
 
-    # Plot the first example of the class
-    ax = axes[i // 2, i % 2]
-    ax.imshow(features[class_indices[0]].reshape(28, 28), cmap="gray")
-    ax.axis("off")
-    ax.set_title(class_name)
+    for j in range(examples_per_class):
+        ax = axes[j, i]
+        ax.imshow(features[class_indices[j]].reshape(28, 28), cmap="gray")
+        ax.axis("off")
+        ax.set_title(class_name)
 
 # Adjust layout
 plt.subplots_adjust()
