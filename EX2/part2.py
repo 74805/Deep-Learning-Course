@@ -115,16 +115,6 @@ def train_model(model, X_train, y_train, X_val, y_val, num_epochs=100, batch_siz
     return train_losses, val_losses, train_accuracies, val_accuracies
 
 
-def mini_batch_gradient_descent(self, X, y, batch_size=64, num_epochs=100):
-    num_batches = len(X) // batch_size
-    for epoch in range(num_epochs):
-        for batch in range(num_batches):
-            start = batch * batch_size
-            end = (batch + 1) * batch_size
-            X_batch, y_batch = X[start:end], y[start:end]
-            self.train(X_batch, y_batch)
-
-
 def accuracy(predictions, labels):
     predicted_labels = np.argmax(predictions, axis=1)
     return np.mean(predicted_labels == labels)
@@ -140,31 +130,54 @@ X_train, X_val = normalize_data(X_train, X_val)
 input_size = X_train.shape[1]
 num_classes = 10
 
-# Initialize and train the model
-model = LogisticRegression(input_size, num_classes)
-train_losses, val_losses, train_accuracies, val_accuracies = train_model(
-    model, X_train, y_train, X_val, y_val
+# Configurations
+batch_sizes = [32, 64, 128]
+learning_rates = [0.001, 0.01, 0.1]
+reg_strengths = [0.001, 0.01, 0.1]
+
+# Create a figure to hold all the subplots
+fig, axs = plt.subplots(
+    len(batch_sizes), len(learning_rates) * len(reg_strengths), figsize=(15, 10)
 )
 
-for i in range(len(train_losses)):
-    print(
-        f"Epoch {i + 1}, Train Loss: {train_losses[i]:.4f}, Train Acc: {train_accuracies[i]:.4f}, Val Loss: {val_losses[i]:.4f}, Val Acc: {val_accuracies[i]:.4f}"
-    )
+best_model = None
 
-# Plot train and validation loss and accuracy curves as a function of the number of epochs
-plt.figure(figsize=(12, 4))
-plt.subplot(1, 2, 1)
-plt.plot(train_losses, label="Train Loss")
-plt.plot(val_losses, label="Val Loss")
-plt.xlabel("Epochs")
-plt.ylabel("Loss")
-plt.legend()
+for i, batch_size in enumerate(batch_sizes):
+    for j, learning_rate in enumerate(learning_rates):
+        for k, reg_strength in enumerate(reg_strengths):
+            # Initialize and train the model
+            model = LogisticRegression(
+                input_size,
+                num_classes,
+                learning_rate=learning_rate,
+                reg_strength=reg_strength,
+            )
+
+            # Train the model
+            train_losses, val_losses, train_accuracies, val_accuracies = train_model(
+                model, X_train, y_train, X_val, y_val, batch_size=batch_size
+            )
+
+            # Plot train and validation loss and accuracy curves as a function of the number of epochs
+            plt.figure(figsize=(12, 4))
+            plt.suptitle(
+                f"Loss with Batch size: {batch_size}, Learning rate: {learning_rate}, Regularization strength: {reg_strength}"
+            )
+            plt.subplot(1, 2, 1)
+            plt.plot(train_losses, label="Train loss")
+            plt.plot(val_losses, label="Val loss")
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.legend()
+
+            # Save best model
+            if best_model is None or val_accuracies[-1] > best_model[1][-1]:
+                best_model = (model, val_accuracies)
+
+
+# Save the predictions of the best model to a file
+best_model, val_losses = best_model
+predicted_labels = np.argmax(best_model.predict(test_data), axis=1)
+np.savetxt("test_predictions.csv", predicted_labels, fmt="%d", delimiter=",")
+
 plt.show()
-
-
-# Generate predictions for test set
-test_predictions = model.predict(test_data)
-predicted_labels = np.argmax(test_predictions, axis=1)
-
-# Save predictions to a file
-np.savetxt("lr_pred.csv", predicted_labels, fmt="%d", delimiter="\n")
