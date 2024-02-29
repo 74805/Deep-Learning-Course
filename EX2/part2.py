@@ -183,7 +183,7 @@ fig, axs = plt.subplots(
 )
 
 best_model = None
-
+num_epochs = int(input("Enter the number of epochs: "))
 for i, batch_size in enumerate(batch_sizes):
     for j, learning_rate in enumerate(learning_rates):
         for k, reg_strength in enumerate(reg_strengths):
@@ -197,7 +197,13 @@ for i, batch_size in enumerate(batch_sizes):
 
             # Train the model
             train_losses, val_losses, train_accuracies, val_accuracies = train_model(
-                model, X_train, y_train, X_val, y_val, batch_size=batch_size
+                model,
+                X_train,
+                y_train,
+                X_val,
+                y_val,
+                num_epochs=num_epochs,
+                batch_size=batch_size,
             )
 
             # Plot train and validation loss and accuracy curves as a function of the number of epochs
@@ -220,15 +226,8 @@ for i, batch_size in enumerate(batch_sizes):
             plt.legend()
 
             # Save best model
-            if best_model is None or val_accuracies[-1] > best_model[1][-1]:
-                best_model = (model, val_accuracies)
-
-
-# Give the best model another 100 epochs
-train_model(
-    best_model[0], X_train, y_train, X_val, y_val, num_epochs=100, batch_size=64
-)
-
+            if best_model is None or val_accuracies[-1] < best_model[1]:
+                best_model = (model, val_accuracies[-1])
 
 # Save the predictions of the best model to a file
 best_model, val_losses = best_model
