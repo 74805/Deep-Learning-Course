@@ -23,7 +23,7 @@ class LogisticRegression:
     def __init__(self, input_size, num_classes, learning_rate=0.01, reg_strength=0.01):
         self.learning_rate = learning_rate
         self.reg_strength = reg_strength
-        self.weights = np.zeros((input_size, num_classes))
+        self.weights = np.random.randn(input_size, num_classes) * 0.01
         self.bias = np.zeros(num_classes)
 
     def softmax(self, logits):
@@ -80,12 +80,54 @@ class LogisticRegression:
         self.bias -= self.learning_rate * np.mean(probs - y_reshaped, axis=0)
 
 
+def compute_loss_and_accuracy(
+    model,
+    X_train,
+    y_train,
+    X_val,
+    y_val,
+    train_losses,
+    val_losses,
+    train_accuracies,
+    val_accuracies,
+):
+    train_loss = model.L2(X_train, y_train)
+    val_loss = model.L2(X_val, y_val)
+    train_losses.append(train_loss)
+    val_losses.append(val_loss)
+
+    train_predictions = model.predict(X_train)
+    val_predictions = model.predict(X_val)
+    train_accuracy = accuracy(train_predictions, y_train)
+    val_accuracy = accuracy(val_predictions, y_val)
+    train_accuracies.append(train_accuracy)
+    val_accuracies.append(val_accuracy)
+
+    return train_loss, val_loss, train_accuracy, val_accuracy
+
+
 # Training
 def train_model(model, X_train, y_train, X_val, y_val, num_epochs=100, batch_size=64):
     train_losses = []
     val_losses = []
     train_accuracies = []
     val_accuracies = []
+
+    train_loss, val_loss, train_accuracy, val_accuracy = compute_loss_and_accuracy(
+        model,
+        X_train,
+        y_train,
+        X_val,
+        y_val,
+        train_losses,
+        val_losses,
+        train_accuracies,
+        val_accuracies,
+    )
+
+    print(
+        f"Before training, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
+    )
 
     num_batches = len(X_train) // batch_size
     for epoch in range(num_epochs):
@@ -95,22 +137,22 @@ def train_model(model, X_train, y_train, X_val, y_val, num_epochs=100, batch_siz
             X_batch, y_batch = X_train[start:end], y_train[start:end]
             model.train(X_batch, y_batch)
 
-        model.train(X_train, y_train)
-        train_loss = model.L2(X_train, y_train)
-        val_loss = model.L2(X_val, y_val)
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
-
-        train_predictions = model.predict(X_train)
-        val_predictions = model.predict(X_val)
-        train_accuracy = accuracy(train_predictions, y_train)
-        val_accuracy = accuracy(val_predictions, y_val)
-        train_accuracies.append(train_accuracy)
-        val_accuracies.append(val_accuracy)
-
-        print(
-            f"Epoch {epoch + 1}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
+        train_loss, val_loss, train_accuracy, val_accuracy = compute_loss_and_accuracy(
+            model,
+            X_train,
+            y_train,
+            X_val,
+            y_val,
+            train_losses,
+            val_losses,
+            train_accuracies,
+            val_accuracies,
         )
+
+        if epoch == num_epochs - 1:
+            print(
+                f"Epoch {epoch + 1}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
+            )
 
     return train_losses, val_losses, train_accuracies, val_accuracies
 
@@ -170,9 +212,22 @@ for i, batch_size in enumerate(batch_sizes):
             plt.ylabel("Loss")
             plt.legend()
 
+            plt.subplot(1, 2, 2)
+            plt.plot(train_accuracies, label="Train accuracy")
+            plt.plot(val_accuracies, label="Val accuracy")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.legend()
+
             # Save best model
             if best_model is None or val_accuracies[-1] > best_model[1][-1]:
                 best_model = (model, val_accuracies)
+
+
+# Give the best model another 100 epochs
+train_model(
+    best_model[0], X_train, y_train, X_val, y_val, num_epochs=100, batch_size=64
+)
 
 
 # Save the predictions of the best model to a file
