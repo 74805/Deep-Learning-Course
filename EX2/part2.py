@@ -209,7 +209,7 @@ for i, batch_size in enumerate(batch_sizes):
             # Plot train and validation loss and accuracy curves as a function of the number of epochs
             plt.figure(figsize=(12, 4))
             plt.suptitle(
-                f"Loss with Batch size: {batch_size}, Learning rate: {learning_rate}, Regularization strength: {reg_strength}"
+                f"Loss and accuracy with Batch size: {batch_size}, Learning rate: {learning_rate}, Regularization strength: {reg_strength}"
             )
             plt.subplot(1, 2, 1)
             plt.plot(train_losses, label="Train loss")
@@ -226,11 +226,48 @@ for i, batch_size in enumerate(batch_sizes):
             plt.legend()
 
             # Save best model
-            if best_model is None or val_accuracies[-1] < best_model[1]:
-                best_model = (model, val_accuracies[-1])
+            if best_model is None or val_accuracies[-1] > best_model[4][-1]:
+                best_model = (
+                    model,
+                    train_losses,
+                    val_losses,
+                    train_accuracies,
+                    val_accuracies,
+                    batch_size,
+                    learning_rate,
+                    reg_strength,
+                )
+
+# Plot the best model
+(
+    best_model,
+    train_losses,
+    val_losses,
+    train_accuracies,
+    val_accuracies,
+    batch_size,
+    learning_rate,
+    reg_strength,
+) = best_model
+plt.figure(figsize=(12, 4))
+plt.suptitle(
+    f"Best Model - Batch size: {batch_size}, Learning rate: {learning_rate}, Regularization strength: {reg_strength}"
+)
+plt.subplot(1, 2, 1)
+plt.plot(train_losses, label="Train loss")
+plt.plot(val_losses, label="Val loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+
+plt.subplot(1, 2, 2)
+plt.plot(train_accuracies, label="Train accuracy")
+plt.plot(val_accuracies, label="Val accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
 
 # Save the predictions of the best model to a file
-best_model, val_losses = best_model
 predicted_labels = np.argmax(best_model.predict(test_data), axis=1)
 np.savetxt("test_predictions.csv", predicted_labels, fmt="%d", delimiter=",")
 
