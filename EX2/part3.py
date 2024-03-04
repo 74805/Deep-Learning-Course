@@ -214,7 +214,7 @@ def plot_loss_curve(train_losses, val_losses, train_accuracies, val_accuracies, 
 def train_and_plot(
     X_train, y_train, X_val, y_val, input_size, output_size, configuration
 ):
-    hidden_size, activation, batch_size, learning_rate, reg_strength, dropout_rate = (
+    batch_size, learning_rate, reg_strength, hidden_size, activation, dropout_rate = (
         configuration
     )
     model = NeuralNetwork(
@@ -239,7 +239,16 @@ def train_and_plot(
         f"Loss and Accuracy curves with Batch size: {batch_size}, Learning rate: {learning_rate}, Regularization strength: {reg_strength}, hidden size: {hidden_size}, activation function: {activation}, Dropout rate: {dropout_rate:.4f}",
     )
 
-    models.append((model, val_accuracies[-1], configuration))
+    models.append(
+        (
+            model,
+            train_losses,
+            val_losses,
+            train_accuracies,
+            val_accuracies,
+            configuration,
+        )
+    )
 
     print(
         f"Batch Size: {batch_size:.4f}, Learning Rate: {learning_rate:.4f}, Regularization Strength: {reg_strength:.4f}, hidden size: {hidden_size:.4f}, activation function: {activation}, Dropout rate: {dropout_rate:.4f}, Loss: {val_losses[-1]:.4f}, Accuracy: {val_accuracies[-1]:.4f}"
@@ -249,9 +258,8 @@ def train_and_plot(
 def find_best_model():
     best_model = None
     for model in models:
-        if (
-            best_model is None or model[1] > best_model[1]
-        ):  # Take the model with the highest validation accuracy
+        if best_model is None or model[4][-1] > best_model[4][-1]:
+            # Take the model with the highest validation accuracy
             best_model = model
     return best_model
 
@@ -298,11 +306,11 @@ for i in range(number_of_tries):
         reg_strength = np.random.choice(reg_strengths)
         dropout_rate = np.random.choice(dropout_rates)
         configuration = (
-            hidden_size,
-            activation,
             batch_size,
             learning_rate,
             reg_strength,
+            hidden_size,
+            activation,
             dropout_rate,
         )
 
@@ -315,15 +323,11 @@ for i in range(number_of_tries):
 
 # Find the best model
 best_model = find_best_model()
-
-# Give the best model another 100 epochs
-model = best_model[0]
-batch_size = best_model[2][2]
-train_losses, val_losses, train_accuracies, val_accuracies = model.train(
-    X_train, y_train, X_val, y_val, num_epochs, batch_size
+model, train_losses, val_losses, train_accuracies, val_accuracies, configuration = (
+    best_model
 )
 print(
-    f"Best model, Loss: {val_losses[-1]:.4f}, Accuracy: {val_accuracies[-1]:.4f}, Batch size: {batch_size:.4f}, Learning rate: {best_model[2][3]:.4f}, Regularization Strength: {best_model[2][4]:.4f}, hidden size: {best_model[2][0]:.4f}, activation function: {best_model[2][1]}, Dropout rate: {best_model[2][5]:.4f}"
+    f"Best Model: Batch size: {configuration[0]}, Learning rate: {configuration[1]}, Regularization strength: {configuration[2]}, hidden size: {configuration[3]}, activation function: {configuration[4]}, Dropout rate: {configuration[5]:.4f}"
 )
 
 # Plot the best model's loss curve
@@ -332,7 +336,7 @@ plot_loss_curve(
     val_losses,
     train_accuracies,
     val_accuracies,
-    f"BEST MODEL: Loss and Accuracy curves with Batch size: {batch_size}, Learning rate: {best_model[2][3]}, Regularization strength: {best_model[2][4]}, hidden size: {best_model[2][0]}, activation function: {best_model[2][1]}, Dropout rate: {best_model[2][5]}",
+    f"Best Model: Batch size: {configuration[0]}, Learning rate: {configuration[1]}, Regularization strength: {configuration[2]}, hidden size: {configuration[3]}, activation function: {configuration[4]}, Dropout rate: {configuration[5]:.4f}",
 )
 
 # Predict on test set
