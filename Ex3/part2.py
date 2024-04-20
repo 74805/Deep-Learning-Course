@@ -87,6 +87,34 @@ class CustomClassifier(nn.Module):
         return x
 
 
+# Define Fixed MobileNetV2 as feature extractor
+class FixedMobileNetV2(nn.Module):
+    def __init__(self):
+        super(FixedMobileNetV2, self).__init__()
+        mobilenet = models.mobilenet_v2(pretrained=True)
+        for param in mobilenet.parameters():
+            param.requires_grad = False
+        self.features = mobilenet.features
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        return x
+
+
+# Define Learned MobileNetV2 as feature extractor
+class LearnedMobileNetV2(nn.Module):
+    def __init__(self):
+        super(LearnedMobileNetV2, self).__init__()
+        mobilenet = models.mobilenet_v2(pretrained=True)
+        self.features = mobilenet.features
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        return x
+
+
 # Function to count learnable parameters
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -143,11 +171,6 @@ def main():
     # Device configuration
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Hyperparameters
-    batch_size = 64
-    learning_rate = 0.001
-    num_epochs = 10
-
     # Data transforms with augmentation
     train_transform = transforms.Compose(
         [
@@ -176,95 +199,276 @@ def main():
         root="./data", split="test", transform=val_transform, download=True
     )
 
-    # Define data loaders
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    num_epochs = 10
 
-    # Choose the network architecture
-    print("Choose the network architecture:")
-    print("1. Logistic Regression")
-    print("2. Fully-connected Neural Network")
-    print("3. Convolutional Neural Network")
-    print("4. MobileNetV2 as feature extractor (fixed) + Custom Classifier")
-    print("5. MobileNetV2 as feature extractor (learned) + Custom Classifier")
-    choice = int(input("Enter your choice (1/2/3/4/5): "))
+    print(
+        "Choose whether to train on different configuration or train once on a chosen architecture:"
+    )
+    print("1. Train on different configurations")
+    print("2. Train once on a chosen architecture")
+    choice = int(input("Enter your choice (1/2): "))
 
     if choice == 1:
-        input_size = 3 * 64 * 64
-        num_classes = 10
-        model = LogisticRegression(input_size, num_classes).to(device)
+        # Hyperparameters
+        layer_sizes = [32, 64, 128, 256, 512]
+        batch_sizes = [32, 64, 128, 256]
+        optimizers = [optim.Adam, optim.SGD]
+        learning_rates = [0.1, 0.01, 0.001, 0.0001]
+        regularization_coeffs = [0.1, 0.01, 0.001, 0.0001]
+        architectures = [
+            LogisticRegression,
+            FullyConnectedNN,
+            CNN,
+            FixedMobileNetV2,
+            LearnedMobileNetV2,
+        ]
+
+        # Sample random different configurations
+        num_configs = 50
+        sampled_configs = []
+        for _ in range(num_configs):
+            layer_size = layer_sizes[torch.randint(0, len(layer_sizes), (1,))]
+            batch_size = batch_sizes[torch.randint(0, len(batch_sizes), (1,))]
+            optimizer = optimizers[torch.randint(0, len(optimizers), (1,))]
+            learning_rate = learning_rates[torch.randint(0, len(learning_rates), (1,))]
+            regularization_coeff = regularization_coeffs[
+                torch.randint(0, len(regularization_coeffs), (1,))
+            ]
+            architecture = architectures[torch.randint(0, len(architectures), (1,))]
+            config = (
+                layer_size,
+                batch_size,
+                optimizer,
+                learning_rate,
+                regularization_coeff,
+                architecture,
+            )
+
+            while config in sampled_configs:
+                layer_size = layer_sizes[torch.randint(0, len(layer_sizes), (1,))]
+                batch_size = batch_sizes[torch.randint(0, len(batch_sizes), (1,))]
+                optimizer = optimizers[torch.randint(0, len(optimizers), (1,))]
+                learning_rate = learning_rates[
+                    torch.randint(0, len(learning_rates), (1,))
+                ]
+                regularization_coeff = regularization_coeffs[
+                    torch.randint(0, len(regularization_coeffs), (1,))
+                ]
+                architecture = architectures[torch.randint(0, len(architectures), (1,))]
+                config = (
+                    layer_size,
+                    batch_size,
+                    optimizer,
+                    learning_rate,
+                    regularization_coeff,
+                    architecture,
+                )
+            sampled_configs.append(config)
+
+        # Train on different configurations
+        best_model = None
+        for idx, config in enumerate(sampled_configs):
+            print(f"\nConfiguration {idx+1}/{num_configs}")
+            (
+                layer_size,
+                batch_size,
+                optimizer,
+                learning_rate,
+                regularization_coeff,
+                architecture,
+            ) = config
+            print(f"Layer Size: {layer_size}")
+            print(f"Optimizer: {optimizer.__name__}")
+            print(f"Learning Rate: {learning_rate}")
+            print(f"Regularization Coefficient: {regularization_coeff}")
+            print(f"Architecture: {architecture.__name__}")
+
+            # Define data loaders
+            train_loader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+            if architecture == LogisticRegression:
+                input_size = 3 * 64 * 64
+                num_classes = 10
+                model = architecture(input_size, num_classes).to(device)
+            elif architecture == FullyConnectedNN:
+                input_size = 3 * 64 * 64
+                num_classes = 10
+                model = architecture(input_size, layer_size, num_classes).to(device)
+            elif architecture == CNN:
+                num_classes = 10
+                model = architecture(num_classes).to(device)
+            elif architecture == FixedMobileNetV2:
+                num_classes = 10
+                mobilenet = models.mobilenet_v2(pretrained=True)
+                for param in mobilenet.parameters():
+                    param.requires_grad = False
+                mobilenet.classifier = CustomClassifier(num_classes)
+                model = mobilenet.to(device)
+            elif architecture == LearnedMobileNetV2:
+                num_classes = 10
+                mobilenet = models.mobilenet_v2(pretrained=True)
+                mobilenet.classifier = CustomClassifier(num_classes)
+                model = mobilenet.to(device)
+
+            # Model, criterion, and optimizer
+            criterion = nn.CrossEntropyLoss()
+            optimizer = optimizer(model.parameters(), lr=learning_rate)
+
+            # Training loop
+            train_losses = []
+            val_losses = []
+            train_accuracies = []
+            val_accuracies = []
+            for epoch in range(num_epochs):
+                # Train the model
+                train_loss, train_accuracy = train(
+                    model, criterion, optimizer, train_loader, device
+                )
+                val_loss, val_accuracy = evaluate(model, criterion, val_loader, device)
+
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                train_accuracies.append(train_accuracy)
+                val_accuracies.append(val_accuracy)
+
+                print(
+                    f"Epoch [{epoch+1}/{num_epochs}], "
+                    f"Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, "
+                    f"Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
+                )
+
+            if best_model is None or val_losses[-1] < best_model[2][-1]:
+                best_model = (
+                    model,
+                    train_losses,
+                    val_losses,
+                    train_accuracies,
+                    val_accuracies,
+                )
+
+        # Plotting
+        plt.figure(figsize=(num_epochs, 5))
+        plt.plot(range(1, num_epochs + 1), best_model[1], label="Train Loss")
+        plt.plot(range(1, num_epochs + 1), best_model[2], label="Val Loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.title("Training and Validation Loss")
+        plt.legend()
+        plt.show()
+
+        plt.figure(figsize=(num_epochs, 5))
+        plt.plot(range(1, num_epochs + 1), best_model[3], label="Train Accuracy")
+        plt.plot(range(1, num_epochs + 1), best_model[4], label="Val Accuracy")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.title("Training and Validation Accuracy")
+        plt.legend()
+        plt.show()
+
     elif choice == 2:
-        input_size = 3 * 64 * 64
-        hidden_size = 256
-        num_classes = 10
-        model = FullyConnectedNN(input_size, hidden_size, num_classes).to(device)
-    elif choice == 3:
-        num_classes = 10
-        model = CNN(num_classes).to(device)
-    elif choice == 4:
-        num_classes = 10
-        mobilenet = models.mobilenet_v2(pretrained=True)
-        for param in mobilenet.parameters():
-            param.requires_grad = False
-        mobilenet.classifier = CustomClassifier(num_classes)
-        model = mobilenet.to(device)
-    elif choice == 5:
-        num_classes = 10
-        mobilenet = models.mobilenet_v2(pretrained=True)
-        mobilenet.classifier = CustomClassifier(num_classes)
-        model = mobilenet.to(device)
+
+        # Hyperparameters
+        layer_size = 256
+        batch_size = 64
+        optimizer = optim.Adam
+        learning_rate = 0.001
+        regularization_coeff = 0.01
+
+        # Define data loaders
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        # Choose the network architecture
+        print("Choose the network architecture:")
+        print("1. Logistic Regression")
+        print("2. Fully-connected Neural Network")
+        print("3. Convolutional Neural Network")
+        print("4. MobileNetV2 as feature extractor (fixed) + Custom Classifier")
+        print("5. MobileNetV2 as feature extractor (learned) + Custom Classifier")
+        choice = int(input("Enter your choice (1/2/3/4/5): "))
+
+        if choice == 1:
+            input_size = 3 * 64 * 64
+            num_classes = 10
+            model = LogisticRegression(input_size, num_classes).to(device)
+        elif choice == 2:
+            input_size = 3 * 64 * 64
+            hidden_size = 256
+            num_classes = 10
+            model = FullyConnectedNN(input_size, hidden_size, num_classes).to(device)
+        elif choice == 3:
+            num_classes = 10
+            model = CNN(num_classes).to(device)
+        elif choice == 4:
+            num_classes = 10
+            mobilenet = models.mobilenet_v2(pretrained=True)
+            for param in mobilenet.parameters():
+                param.requires_grad = False
+            mobilenet.classifier = CustomClassifier(num_classes)
+            model = mobilenet.to(device)
+        elif choice == 5:
+            num_classes = 10
+            mobilenet = models.mobilenet_v2(pretrained=True)
+            mobilenet.classifier = CustomClassifier(num_classes)
+            model = mobilenet.to(device)
+        else:
+            print("Invalid choice. Exiting...")
+            return
+
+        # Print number of learnable parameters
+        print(f"Number of learnable parameters: {count_parameters(model)}")
+
+        # Model, criterion, and optimizer
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+        # Training loop
+        train_losses = []
+        val_losses = []
+        train_accuracies = []
+        val_accuracies = []
+        for epoch in range(num_epochs):
+            # Train the model
+            train_loss, train_accuracy = train(
+                model, criterion, optimizer, train_loader, device
+            )
+            val_loss, val_accuracy = evaluate(model, criterion, val_loader, device)
+
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+            train_accuracies.append(train_accuracy)
+            val_accuracies.append(val_accuracy)
+
+            print(
+                f"Epoch [{epoch+1}/{num_epochs}], "
+                f"Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, "
+                f"Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
+            )
+
+        # Plotting
+        plt.figure(figsize=(num_epochs, 5))
+        plt.plot(range(1, num_epochs + 1), train_losses, label="Train Loss")
+        plt.plot(range(1, num_epochs + 1), val_losses, label="Val Loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.title("Training and Validation Loss")
+        plt.legend()
+        plt.show()
+
+        plt.figure(figsize=(num_epochs, 5))
+        plt.plot(range(1, num_epochs + 1), train_accuracies, label="Train Accuracy")
+        plt.plot(range(1, num_epochs + 1), val_accuracies, label="Val Accuracy")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.title("Training and Validation Accuracy")
+        plt.legend()
+        plt.show()
+
     else:
         print("Invalid choice. Exiting...")
-        return
-
-    # Print number of learnable parameters
-    print(f"Number of learnable parameters: {count_parameters(model)}")
-
-    # Model, criterion, and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
-    # Training loop
-    train_losses = []
-    val_losses = []
-    train_accuracies = []
-    val_accuracies = []
-    for epoch in range(num_epochs):
-        # Train the model
-        train_loss, train_accuracy = train(
-            model, criterion, optimizer, train_loader, device
-        )
-        val_loss, val_accuracy = evaluate(model, criterion, val_loader, device)
-
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
-        train_accuracies.append(train_accuracy)
-        val_accuracies.append(val_accuracy)
-
-        print(
-            f"Epoch [{epoch+1}/{num_epochs}], "
-            f"Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, "
-            f"Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
-        )
-
-    # Plotting
-    plt.figure(figsize=(num_epochs, 5))
-    plt.plot(range(1, num_epochs + 1), train_losses, label="Train Loss")
-    plt.plot(range(1, num_epochs + 1), val_losses, label="Val Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title("Training and Validation Loss")
-    plt.legend()
-    plt.show()
-
-    plt.figure(figsize=(num_epochs, 5))
-    plt.plot(range(1, num_epochs + 1), train_accuracies, label="Train Accuracy")
-    plt.plot(range(1, num_epochs + 1), val_accuracies, label="Val Accuracy")
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
-    plt.title("Training and Validation Accuracy")
-    plt.legend()
-    plt.show()
 
 
 if __name__ == "__main__":
