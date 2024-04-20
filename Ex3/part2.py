@@ -74,6 +74,19 @@ class CNN(nn.Module):
         return x
 
 
+# Define the custom classifier
+class CustomClassifier(nn.Module):
+    def __init__(self, num_classes):
+        super(CustomClassifier, self).__init__()
+        self.fc1 = nn.Linear(1280, 512)
+        self.fc2 = nn.Linear(512, num_classes)
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
+
 # Function to count learnable parameters
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -158,7 +171,8 @@ def main():
     print("1. Logistic Regression")
     print("2. Fully-connected Neural Network")
     print("3. Convolutional Neural Network")
-    choice = int(input("Enter your choice (1/2/3): "))
+    print("4. MobileNetV2 as feature extractor (fixed) + Custom Classifier")
+    choice = int(input("Enter your choice (1/2/3/4): "))
 
     if choice == 1:
         input_size = 3 * 64 * 64
@@ -172,6 +186,13 @@ def main():
     elif choice == 3:
         num_classes = 10
         model = CNN(num_classes).to(device)
+    elif choice == 4:
+        num_classes = 10
+        mobilenet = models.mobilenet_v2(pretrained=True)
+        for param in mobilenet.parameters():
+            param.requires_grad = False
+        mobilenet.classifier = CustomClassifier(num_classes)
+        model = mobilenet.to(device)
     else:
         print("Invalid choice. Exiting...")
         return
