@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 from torchvision.datasets import STL10
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 import torchvision.models as models
 import matplotlib.pyplot as plt
 
@@ -148,23 +148,37 @@ def main():
     learning_rate = 0.001
     num_epochs = 10
 
-    # Data transforms
-    transform = transforms.Compose(
+    # Data transforms with augmentation
+    train_transform = transforms.Compose(
+        [
+            transforms.Resize((64, 64)),
+            transforms.RandomHorizontalFlip(),  # Randomly flip the image horizontally
+            transforms.RandomRotation(
+                degrees=10
+            ),  # Randomly rotate the image by up to 10 degrees
+            transforms.ToTensor(),
+        ]
+    )
+
+    # Validation/test data transforms (no augmentation)
+    val_transform = transforms.Compose(
         [
             transforms.Resize((64, 64)),
             transforms.ToTensor(),
         ]
     )
 
-    # Load STL-10 dataset
-    dataset = STL10(root="./data", split="train", transform=transform, download=True)
-    train_size = int(0.8 * len(dataset))
-    train_data, val_data = random_split(
-        dataset, [train_size, len(dataset) - train_size]
+    # Load STL-10 dataset with augmentation
+    train_dataset = STL10(
+        root="./data", split="train", transform=train_transform, download=True
+    )
+    val_dataset = STL10(
+        root="./data", split="test", transform=val_transform, download=True
     )
 
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
+    # Define data loaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # Choose the network architecture
     print("Choose the network architecture:")
