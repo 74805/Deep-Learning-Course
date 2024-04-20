@@ -4,6 +4,7 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 from torchvision.datasets import STL10
 from torch.utils.data import DataLoader, random_split
+import torchvision.models as models
 import matplotlib.pyplot as plt
 
 
@@ -19,13 +20,45 @@ class LogisticRegression(nn.Module):
         return x
 
 
+# Define the fully-connected neural network
+class FullyConnectedNN(nn.Module):
+    def __init__(self, input_size, hidden_size, num_classes):
+        super(FullyConnectedNN, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.bn1 = nn.BatchNorm1d(hidden_size)
+        self.dropout1 = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.bn2 = nn.BatchNorm1d(hidden_size)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc3 = nn.Linear(hidden_size, hidden_size)
+        self.bn3 = nn.BatchNorm1d(hidden_size)
+        self.dropout3 = nn.Dropout(0.5)
+        self.fc4 = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)  # Flatten the input
+        x = torch.relu(self.bn1(self.fc1(x)))
+        x = self.dropout1(x)
+        x = torch.relu(self.bn2(self.fc2(x)))
+        x = self.dropout2(x)
+        x = torch.relu(self.bn3(self.fc3(x)))
+        x = self.dropout3(x)
+        x = self.fc4(x)
+        return x
+
+
+# Function to count learnable parameters
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
 # Function to train the model
-def train(model, criterion, optimizer, dataloader, device):
+def train(model, criterion, optimizer, train_loader, device):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
-    for inputs, labels in dataloader:
+    for inputs, labels in train_loader:
         inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -38,19 +71,19 @@ def train(model, criterion, optimizer, dataloader, device):
         total += labels.size(0)
         correct += predicted.eq(labels).sum().item()
 
-    train_loss = running_loss / len(dataloader)
+    train_loss = running_loss / len(train_loader)
     train_accuracy = correct / total
     return train_loss, train_accuracy
 
 
 # Function to evaluate the model
-def evaluate(model, criterion, dataloader, device):
+def evaluate(model, criterion, val_loader, device):
     model.eval()
     running_loss = 0.0
     correct = 0
     total = 0
     with torch.no_grad():
-        for inputs, labels in dataloader:
+        for inputs, labels in val_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             loss = criterion(outputs, labels)
@@ -60,7 +93,7 @@ def evaluate(model, criterion, dataloader, device):
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
 
-    val_loss = running_loss / len(dataloader)
+    val_loss = running_loss / len(val_loader)
     val_accuracy = correct / total
     return val_loss, val_accuracy
 
@@ -73,7 +106,7 @@ def main():
     # Hyperparameters
     batch_size = 64
     learning_rate = 0.001
-    num_epochs = 100
+    num_epochs = 10
 
     # Data transforms
     transform = transforms.Compose(
@@ -93,8 +126,29 @@ def main():
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
 
+    # Choose the network architecture
+    print("Choose the network architecture:")
+    print("1. Logistic Regression")
+    print("2. Fully-connected Neural Network")
+    choice = int(input("Enter your choice (1/2): "))
+
+    if choice == 1:
+        input_size = 3 * 64 * 64
+        num_classes = 10
+        model = LogisticRegression(input_size, num_classes).to(device)
+    elif choice == 2:
+        input_size = 3 * 64 * 64
+        hidden_size = 256
+        num_classes = 10
+        model = FullyConnectedNN(input_size, hidden_size, num_classes).to(device)
+    else:
+        print("Invalid choice. Exiting...")
+        return
+
+    # Print number of learnable parameters
+    print(f"Number of learnable parameters: {count_parameters(model)}")
+
     # Model, criterion, and optimizer
-    model = LogisticRegression(input_size=3 * 64 * 64, num_classes=10).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -122,7 +176,7 @@ def main():
         )
 
     # Plotting
-    plt.figure(figsize=(100, 5))
+    plt.figure(figsize=(num_epochs, 5))
     plt.plot(range(1, num_epochs + 1), train_losses, label="Train Loss")
     plt.plot(range(1, num_epochs + 1), val_losses, label="Val Loss")
     plt.xlabel("Epoch")
@@ -131,7 +185,7 @@ def main():
     plt.legend()
     plt.show()
 
-    plt.figure(figsize=(100, 5))
+    plt.figure(figsize=(num_epochs, 5))
     plt.plot(range(1, num_epochs + 1), train_accuracies, label="Train Accuracy")
     plt.plot(range(1, num_epochs + 1), val_accuracies, label="Val Accuracy")
     plt.xlabel("Epoch")
@@ -139,14 +193,6 @@ def main():
     plt.title("Training and Validation Accuracy")
     plt.legend()
     plt.show()
-
-    # Test the model
-    test_dataset = STL10(
-        root="./data", split="test", transform=transform, download=True
-    )
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    test_loss, test_accuracy = evaluate(model, criterion, test_loader, device)
-    print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.4f}")
 
 
 if __name__ == "__main__":
