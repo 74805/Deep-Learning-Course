@@ -1,3 +1,5 @@
+import sys
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,6 +9,7 @@ from torch.utils.data import DataLoader
 import torchvision.models as models
 import matplotlib.pyplot as plt
 import random
+import threading
 
 
 # Define the logistic regression model
@@ -128,6 +131,8 @@ def train(model, criterion, optimizer, train_loader, device, regularization_coef
     correct = 0
     total = 0
     for inputs, labels in train_loader:
+        if exit_flag:
+            break
         inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -158,6 +163,8 @@ def evaluate(model, criterion, val_loader, device):
     correct = 0
     total = 0
     with torch.no_grad():
+        if exit_flag:
+            return 0, 0
         for inputs, labels in val_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
@@ -171,6 +178,99 @@ def evaluate(model, criterion, val_loader, device):
     val_loss = running_loss / len(val_loader)
     val_accuracy = correct / total
     return val_loss, val_accuracy
+
+
+# Define a function for training with multithreading
+def train_with_multithreading(
+    config, config_index, thread_index, train_dataset, val_dataset, num_epochs, device
+):
+    (
+        layer_size,
+        batch_size,
+        original_optimizer,
+        learning_rate,
+        regularization_coeff,
+        architecture,
+    ) = config
+
+    print(f"\nTraining Configuration {config_index+1}...")
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    if architecture == LogisticRegression:
+        input_size = 3 * 64 * 64
+        num_classes = 10
+        model = architecture(input_size, num_classes).to(device)
+    elif architecture == FullyConnectedNN:
+        input_size = 3 * 64 * 64
+        num_classes = 10
+        model = architecture(input_size, layer_size, num_classes).to(device)
+    elif architecture == CNN:
+        num_classes = 10
+        model = architecture(num_classes).to(device)
+    elif architecture == FixedMobileNetV2:
+        num_classes = 10
+        mobilenet = models.mobilenet_v2(pretrained=True)
+        for param in mobilenet.parameters():
+            param.requires_grad = False
+        mobilenet.classifier = CustomClassifier(num_classes)
+        model = mobilenet.to(device)
+    elif architecture == LearnedMobileNetV2:
+        num_classes = 10
+        mobilenet = models.mobilenet_v2(pretrained=True)
+        mobilenet.classifier = CustomClassifier(num_classes)
+        model = mobilenet.to(device)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = original_optimizer(model.parameters(), lr=learning_rate)
+
+    train_losses = []
+    val_losses = []
+    train_accuracies = []
+    val_accuracies = []
+
+    for epoch in range(num_epochs):
+        if exit_flag:
+            break
+        train_loss, train_accuracy = train(
+            model, criterion, optimizer, train_loader, device, regularization_coeff
+        )
+        val_loss, val_accuracy = evaluate(model, criterion, val_loader, device)
+
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+        train_accuracies.append(train_accuracy)
+        val_accuracies.append(val_accuracy)
+
+        print(
+            f"\nConfiguration {config_index+1}: layer_size: {layer_size}, batch_size: {batch_size}, optimizer: {original_optimizer.__name__}, learning_rate: {learning_rate}, regularization_coeff: {regularization_coeff}, architecture: {architecture.__name__}, "
+            f"Epoch [{epoch+1}/{num_epochs}], "
+            f"Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, "
+            f"Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
+        )
+
+    if len(val_accuracies) == 0:
+        val_accuracies.append(0.0)
+    print(
+        f"\nConfiguration {config_index+1} finished, "
+        f"Best Validation Accuracy: {val_accuracies[-1]}"
+    )
+    used_threads[thread_index] = False
+    results.append((config, train_losses, val_losses, train_accuracies, val_accuracies))
+
+
+def stop():
+    global exit_flag
+    if input("Do you want to stop the training? (y/n): ") == "y":
+        print("Stopping the training...")
+        exit_flag = True
+
+
+exit_flag = False
+num_threads = 6
+used_threads = [False] * num_threads
+results = []
 
 
 # Main function for training and evaluation
@@ -266,122 +366,97 @@ def main():
                 )
             sampled_configs.append(config)
 
-        # Train on different configurations
-        best_model = None
-        for idx, config in enumerate(sampled_configs):
-            print(f"\nConfiguration {idx+1}/{num_configs}")
-            (
-                layer_size,
-                batch_size,
-                optimizer,
-                learning_rate,
-                regularization_coeff,
-                architecture,
-            ) = config
-            print(f"Layer Size: {layer_size}")
-            print(f"Optimizer: {optimizer.__name__}")
-            print(f"Learning Rate: {learning_rate}")
-            print(f"Regularization Coefficient: {regularization_coeff}")
-            print(f"Architecture: {architecture.__name__}")
+        # Train on different configurations using multithreading
+        threads = []
+        config_index = 0
 
-            # Define data loaders
-            train_loader = DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True
-            )
-            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        thread = threading.Thread(target=stop, args=())
+        thread.start()
 
-            if architecture == LogisticRegression:
-                input_size = 3 * 64 * 64
-                num_classes = 10
-                model = architecture(input_size, num_classes).to(device)
-            elif architecture == FullyConnectedNN:
-                input_size = 3 * 64 * 64
-                num_classes = 10
-                model = architecture(input_size, layer_size, num_classes).to(device)
-            elif architecture == CNN:
-                num_classes = 10
-                model = architecture(num_classes).to(device)
-            elif architecture == FixedMobileNetV2:
-                num_classes = 10
-                mobilenet = models.mobilenet_v2(pretrained=True)
-                for param in mobilenet.parameters():
-                    param.requires_grad = False
-                mobilenet.classifier = CustomClassifier(num_classes)
-                model = mobilenet.to(device)
-            elif architecture == LearnedMobileNetV2:
-                num_classes = 10
-                mobilenet = models.mobilenet_v2(pretrained=True)
-                mobilenet.classifier = CustomClassifier(num_classes)
-                model = mobilenet.to(device)
+        # train 6 configurations at a time
+        for config in sampled_configs:
+            if exit_flag:
+                break
+            if config_index >= num_threads:
+                while True:
+                    if exit_flag:
+                        break
+                    thread_started = False
+                    for i in range(num_threads):
+                        if not used_threads[i]:
+                            threads[i] = threading.Thread(
+                                target=train_with_multithreading,
+                                args=(
+                                    config,
+                                    config_index,
+                                    i,
+                                    train_dataset,
+                                    val_dataset,
+                                    num_epochs,
+                                    device,
+                                ),
+                            )
+                            used_threads[i] = True
+                            threads[i].start()
+                            thread_started = True
+                            break
 
-            # Model, criterion, and optimizer
-            criterion = nn.CrossEntropyLoss()
-            optimizer = optimizer(model.parameters(), lr=learning_rate)
+                    if thread_started:
+                        break
 
-            # Training loop
-            train_losses = []
-            val_losses = []
-            train_accuracies = []
-            val_accuracies = []
-            for epoch in range(num_epochs):
-                # Train the model
-                train_loss, train_accuracy = train(
-                    model,
-                    criterion,
-                    optimizer,
-                    train_loader,
-                    device,
-                    regularization_coeff,
-                )
-                val_loss, val_accuracy = evaluate(model, criterion, val_loader, device)
-
-                train_losses.append(train_loss)
-                val_losses.append(val_loss)
-                train_accuracies.append(train_accuracy)
-                val_accuracies.append(val_accuracy)
-
-                print(
-                    f"Epoch [{epoch+1}/{num_epochs}], "
-                    f"Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.4f}, "
-                    f"Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
-                )
-
-                if best_model is None or val_accuracies[-1] < best_model[5][-1]:
-                    best_model = (
-                        model,
-                        config,
-                        train_losses,
-                        val_losses,
-                        train_accuracies,
-                        val_accuracies,
+                    time.sleep(10)
+            else:
+                threads.append(
+                    threading.Thread(
+                        target=train_with_multithreading,
+                        args=(
+                            config,
+                            config_index,
+                            config_index,
+                            train_dataset,
+                            val_dataset,
+                            num_epochs,
+                            device,
+                        ),
                     )
+                )
+                used_threads[config_index] = True
+                threads[config_index].start()
+            config_index += 1
 
-        best_model_config = best_model[1]
+        for thread in threads:
+            thread.join()
+
+        # Find the best model configuration
+        if len(results) == 0:
+            print("No results to show.")
+            return
+        best_model = max(results, key=lambda x: x[4][-1])
+
         # Plotting
         plt.figure(figsize=(num_epochs, 5))
-        plt.plot(range(1, num_epochs + 1), best_model[2], label="Train Loss")
-        plt.plot(range(1, num_epochs + 1), best_model[3], label="Val Loss")
+        plt.plot(range(1, num_epochs + 1), best_model[1], label="Train Loss")
+        plt.plot(range(1, num_epochs + 1), best_model[2], label="Val Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.title(
-            f"Training and Validation Loss (Best Configuration: layer_size: {best_model_config[0]}, batch_size: {best_model_config[1]}, optimizer: {best_model_config[2].__name__}, learning_rate: {best_model_config[3]}, regularization_coeff: {best_model_config[4]}, architecture: {best_model_config[5].__name__})"
+            f"Training and Validation Loss (Best Configuration: layer_size: {best_model[0][0]}, batch_size: {best_model[0][1]}, optimizer: {best_model[0][2].__name__}, learning_rate: {best_model[0][3]}, regularization_coeff: {best_model[0][4]}, architecture: {best_model[0][5].__name__})"
         )
         plt.legend()
         plt.show()
 
         plt.figure(figsize=(num_epochs, 5))
-        plt.plot(range(1, num_epochs + 1), best_model[4], label="Train Accuracy")
-        plt.plot(range(1, num_epochs + 1), best_model[5], label="Val Accuracy")
+        plt.plot(range(1, num_epochs + 1), best_model[3], label="Train Accuracy")
+        plt.plot(range(1, num_epochs + 1), best_model[4], label="Val Accuracy")
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy")
         plt.title(
-            f"Training and Validation Accuracy (Best Configuration: layer_size: {best_model_config[0]}, batch_size: {best_model_config[1]}, optimizer: {best_model_config[2].__name__}, learning_rate: {best_model_config[3]}, regularization_coeff: {best_model_config[4]}, architecture: {best_model_config[5].__name__})"
+            f"Training and Validation Accuracy (Best Configuration: layer_size: {best_model[0][0]}, batch_size: {best_model[0][1]}, optimizer: {best_model[0][2].__name__}, learning_rate: {best_model[0][3]}, regularization_coeff: {best_model[0][4]}, architecture: {best_model[0][5].__name__})"
         )
         plt.legend()
         plt.show()
 
     elif choice == 2:
-
         # Hyperparameters
         layer_size = 256
         batch_size = 64
