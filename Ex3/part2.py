@@ -47,6 +47,33 @@ class FullyConnectedNN(nn.Module):
         return x
 
 
+# Define the convolutional neural network
+class CNN(nn.Module):
+    def __init__(self, num_classes):
+        super(CNN, self).__init__()
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.fc1 = nn.Linear(32 * 16 * 16, 256)
+        self.dropout1 = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(256, 128)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc3 = nn.Linear(128, num_classes)
+
+    def forward(self, x):
+        x = self.pool(torch.relu(self.bn1(self.conv1(x))))
+        x = self.pool(torch.relu(self.bn2(self.conv2(x))))
+        x = x.view(-1, 32 * 16 * 16)
+        x = torch.relu(self.fc1(x))
+        x = self.dropout1(x)
+        x = torch.relu(self.fc2(x))
+        x = self.dropout2(x)
+        x = self.fc3(x)
+        return x
+
+
 # Function to count learnable parameters
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -130,7 +157,8 @@ def main():
     print("Choose the network architecture:")
     print("1. Logistic Regression")
     print("2. Fully-connected Neural Network")
-    choice = int(input("Enter your choice (1/2): "))
+    print("3. Convolutional Neural Network")
+    choice = int(input("Enter your choice (1/2/3): "))
 
     if choice == 1:
         input_size = 3 * 64 * 64
@@ -141,6 +169,9 @@ def main():
         hidden_size = 256
         num_classes = 10
         model = FullyConnectedNN(input_size, hidden_size, num_classes).to(device)
+    elif choice == 3:
+        num_classes = 10
+        model = CNN(num_classes).to(device)
     else:
         print("Invalid choice. Exiting...")
         return
