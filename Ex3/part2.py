@@ -172,7 +172,8 @@ def main():
     print("2. Fully-connected Neural Network")
     print("3. Convolutional Neural Network")
     print("4. MobileNetV2 as feature extractor (fixed) + Custom Classifier")
-    choice = int(input("Enter your choice (1/2/3/4): "))
+    print("5. MobileNetV2 as feature extractor (learned) + Custom Classifier")
+    choice = int(input("Enter your choice (1/2/3/4/5): "))
 
     if choice == 1:
         input_size = 3 * 64 * 64
@@ -191,6 +192,11 @@ def main():
         mobilenet = models.mobilenet_v2(pretrained=True)
         for param in mobilenet.parameters():
             param.requires_grad = False
+        mobilenet.classifier = CustomClassifier(num_classes)
+        model = mobilenet.to(device)
+    elif choice == 5:
+        num_classes = 10
+        mobilenet = models.mobilenet_v2(pretrained=True)
         mobilenet.classifier = CustomClassifier(num_classes)
         model = mobilenet.to(device)
     else:
