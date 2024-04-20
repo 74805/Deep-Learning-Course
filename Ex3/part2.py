@@ -6,6 +6,7 @@ from torchvision.datasets import STL10
 from torch.utils.data import DataLoader
 import torchvision.models as models
 import matplotlib.pyplot as plt
+import random
 
 
 # Define the logistic regression model
@@ -121,7 +122,7 @@ def count_parameters(model):
 
 
 # Function to train the model
-def train(model, criterion, optimizer, train_loader, device):
+def train(model, criterion, optimizer, train_loader, device, regularization_coeff):
     model.train()
     running_loss = 0.0
     correct = 0
@@ -131,6 +132,12 @@ def train(model, criterion, optimizer, train_loader, device):
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, labels)
+
+        l2_reg = torch.tensor(0.0, device=device)
+        for param in model.parameters():
+            l2_reg += torch.norm(param)
+        loss += regularization_coeff * l2_reg
+
         loss.backward()
         optimizer.step()
 
@@ -227,14 +234,12 @@ def main():
         num_configs = 50
         sampled_configs = []
         for _ in range(num_configs):
-            layer_size = layer_sizes[torch.randint(0, len(layer_sizes), (1,))]
-            batch_size = batch_sizes[torch.randint(0, len(batch_sizes), (1,))]
-            optimizer = optimizers[torch.randint(0, len(optimizers), (1,))]
-            learning_rate = learning_rates[torch.randint(0, len(learning_rates), (1,))]
-            regularization_coeff = regularization_coeffs[
-                torch.randint(0, len(regularization_coeffs), (1,))
-            ]
-            architecture = architectures[torch.randint(0, len(architectures), (1,))]
+            layer_size = random.choice(layer_sizes)
+            batch_size = random.choice(batch_sizes)
+            optimizer = random.choice(optimizers)
+            learning_rate = random.choice(learning_rates)
+            regularization_coeff = random.choice(regularization_coeffs)
+            architecture = random.choice(architectures)
             config = (
                 layer_size,
                 batch_size,
@@ -245,16 +250,12 @@ def main():
             )
 
             while config in sampled_configs:
-                layer_size = layer_sizes[torch.randint(0, len(layer_sizes), (1,))]
-                batch_size = batch_sizes[torch.randint(0, len(batch_sizes), (1,))]
-                optimizer = optimizers[torch.randint(0, len(optimizers), (1,))]
-                learning_rate = learning_rates[
-                    torch.randint(0, len(learning_rates), (1,))
-                ]
-                regularization_coeff = regularization_coeffs[
-                    torch.randint(0, len(regularization_coeffs), (1,))
-                ]
-                architecture = architectures[torch.randint(0, len(architectures), (1,))]
+                layer_size = random.choice(layer_sizes)
+                batch_size = random.choice(batch_sizes)
+                optimizer = random.choice(optimizers)
+                learning_rate = random.choice(learning_rates)
+                regularization_coeff = random.choice(regularization_coeffs)
+                architecture = random.choice(architectures)
                 config = (
                     layer_size,
                     batch_size,
@@ -325,7 +326,12 @@ def main():
             for epoch in range(num_epochs):
                 # Train the model
                 train_loss, train_accuracy = train(
-                    model, criterion, optimizer, train_loader, device
+                    model,
+                    criterion,
+                    optimizer,
+                    train_loader,
+                    device,
+                    regularization_coeff,
                 )
                 val_loss, val_accuracy = evaluate(model, criterion, val_loader, device)
 
@@ -340,31 +346,37 @@ def main():
                     f"Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.4f}"
                 )
 
-            if best_model is None or val_losses[-1] < best_model[2][-1]:
-                best_model = (
-                    model,
-                    train_losses,
-                    val_losses,
-                    train_accuracies,
-                    val_accuracies,
-                )
+                if best_model is None or val_accuracies[-1] < best_model[5][-1]:
+                    best_model = (
+                        model,
+                        config,
+                        train_losses,
+                        val_losses,
+                        train_accuracies,
+                        val_accuracies,
+                    )
 
+        best_model_config = best_model[1]
         # Plotting
         plt.figure(figsize=(num_epochs, 5))
-        plt.plot(range(1, num_epochs + 1), best_model[1], label="Train Loss")
-        plt.plot(range(1, num_epochs + 1), best_model[2], label="Val Loss")
+        plt.plot(range(1, num_epochs + 1), best_model[2], label="Train Loss")
+        plt.plot(range(1, num_epochs + 1), best_model[3], label="Val Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
-        plt.title("Training and Validation Loss")
+        plt.title(
+            f"Training and Validation Loss (Best Configuration: layer_size: {best_model_config[0]}, batch_size: {best_model_config[1]}, optimizer: {best_model_config[2].__name__}, learning_rate: {best_model_config[3]}, regularization_coeff: {best_model_config[4]}, architecture: {best_model_config[5].__name__})"
+        )
         plt.legend()
         plt.show()
 
         plt.figure(figsize=(num_epochs, 5))
-        plt.plot(range(1, num_epochs + 1), best_model[3], label="Train Accuracy")
-        plt.plot(range(1, num_epochs + 1), best_model[4], label="Val Accuracy")
+        plt.plot(range(1, num_epochs + 1), best_model[4], label="Train Accuracy")
+        plt.plot(range(1, num_epochs + 1), best_model[5], label="Val Accuracy")
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy")
-        plt.title("Training and Validation Accuracy")
+        plt.title(
+            f"Training and Validation Accuracy (Best Configuration: layer_size: {best_model_config[0]}, batch_size: {best_model_config[1]}, optimizer: {best_model_config[2].__name__}, learning_rate: {best_model_config[3]}, regularization_coeff: {best_model_config[4]}, architecture: {best_model_config[5].__name__})"
+        )
         plt.legend()
         plt.show()
 
@@ -433,7 +445,7 @@ def main():
         for epoch in range(num_epochs):
             # Train the model
             train_loss, train_accuracy = train(
-                model, criterion, optimizer, train_loader, device
+                model, criterion, optimizer, train_loader, device, regularization_coeff
             )
             val_loss, val_accuracy = evaluate(model, criterion, val_loader, device)
 
