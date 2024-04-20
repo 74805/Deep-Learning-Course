@@ -1,4 +1,3 @@
-import sys
 import time
 import torch
 import torch.nn as nn
@@ -268,7 +267,7 @@ def stop():
 
 
 exit_flag = False
-num_threads = 6
+num_threads = 10
 used_threads = [False] * num_threads
 results = []
 
@@ -330,16 +329,16 @@ def main():
             LearnedMobileNetV2,
         ]
 
-        # Sample random different configurations
+        # Sample random different configurations - five per architecture
         num_configs = 50
         sampled_configs = []
-        for _ in range(num_configs):
+        for i in range(num_configs):
             layer_size = random.choice(layer_sizes)
             batch_size = random.choice(batch_sizes)
             optimizer = random.choice(optimizers)
             learning_rate = random.choice(learning_rates)
             regularization_coeff = random.choice(regularization_coeffs)
-            architecture = random.choice(architectures)
+            architecture = architectures[i % len(architectures)]
             config = (
                 layer_size,
                 batch_size,
@@ -431,29 +430,38 @@ def main():
         if len(results) == 0:
             print("No results to show.")
             return
-        best_model = max(results, key=lambda x: x[4][-1])
 
-        # Plotting
-        plt.figure(figsize=(num_epochs, 5))
-        plt.plot(range(1, num_epochs + 1), best_model[1], label="Train Loss")
-        plt.plot(range(1, num_epochs + 1), best_model[2], label="Val Loss")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.title(
-            f"Training and Validation Loss (Best Configuration: layer_size: {best_model[0][0]}, batch_size: {best_model[0][1]}, optimizer: {best_model[0][2].__name__}, learning_rate: {best_model[0][3]}, regularization_coeff: {best_model[0][4]}, architecture: {best_model[0][5].__name__})"
-        )
-        plt.legend()
-        plt.show()
+        # Get the best model of each architecture
+        best_models = []
+        for architecture in architectures:
+            best_model = max(
+                [result for result in results if result[0][5] == architecture],
+                key=lambda x: x[4][-1],
+            )
+            best_models.append(best_model)
 
-        plt.figure(figsize=(num_epochs, 5))
-        plt.plot(range(1, num_epochs + 1), best_model[3], label="Train Accuracy")
-        plt.plot(range(1, num_epochs + 1), best_model[4], label="Val Accuracy")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.title(
-            f"Training and Validation Accuracy (Best Configuration: layer_size: {best_model[0][0]}, batch_size: {best_model[0][1]}, optimizer: {best_model[0][2].__name__}, learning_rate: {best_model[0][3]}, regularization_coeff: {best_model[0][4]}, architecture: {best_model[0][5].__name__})"
-        )
-        plt.legend()
+        # Plot the best model of each architecture
+        for best_model in best_models:
+            plt.figure(figsize=(num_epochs, 5))
+            plt.plot(range(1, num_epochs + 1), best_model[1], label="Train Loss")
+            plt.plot(range(1, num_epochs + 1), best_model[2], label="Val Loss")
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.title(
+                f"Training and Validation Loss (Best Configuration: layer_size: {best_model[0][0]}, batch_size: {best_model[0][1]}, optimizer: {best_model[0][2].__name__}, learning_rate: {best_model[0][3]}, regularization_coeff: {best_model[0][4]}, architecture: {best_model[0][5].__name__})"
+            )
+            plt.legend()
+
+            plt.figure(figsize=(num_epochs, 5))
+            plt.plot(range(1, num_epochs + 1), best_model[3], label="Train Accuracy")
+            plt.plot(range(1, num_epochs + 1), best_model[4], label="Val Accuracy")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.title(
+                f"Training and Validation Accuracy (Best Configuration: layer_size: {best_model[0][0]}, batch_size: {best_model[0][1]}, optimizer: {best_model[0][2].__name__}, learning_rate: {best_model[0][3]}, regularization_coeff: {best_model[0][4]}, architecture: {best_model[0][5].__name__})"
+            )
+            plt.legend()
+
         plt.show()
 
     elif choice == 2:
