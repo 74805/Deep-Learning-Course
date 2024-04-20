@@ -312,7 +312,8 @@ def main():
     )
     print("1. Train on different configurations")
     print("2. Train once on a chosen architecture")
-    choice = int(input("Enter your choice (1/2): "))
+    print("3. Plot examples of augmented images")
+    choice = int(input("Enter your choice (1/2/3): "))
 
     if choice == 1:
         # Hyperparameters
@@ -560,6 +561,25 @@ def main():
         plt.ylabel("Accuracy")
         plt.title("Training and Validation Accuracy")
         plt.legend()
+        plt.show()
+
+    elif choice == 3:
+        # Visualize augmented images
+        fig, axes = plt.subplots(nrows=2, ncols=4, figsize=(10, 5))
+
+        for i in range(4):
+            img, _ = train_dataset[i]
+            axes[0, i].imshow(img.permute(1, 2, 0))
+            axes[0, i].set_title("Original")
+            axes[0, i].axis("off")
+
+        for i in range(4):
+            img, _ = train_dataset[i]
+            axes[1, i].imshow(img.permute(1, 2, 0))
+            axes[1, i].set_title("Augmented")
+            axes[1, i].axis("off")
+
+        plt.tight_layout()
         plt.show()
 
     else:
